@@ -1,0 +1,27 @@
+{
+  "listeners": {
+    "*:8000": {
+      "pass": "applications/api"
+    }
+  },
+  "routes": [
+    {
+      "action": {
+        "share": "/usr/share/nginx/html/$uri",
+        "fallback": {
+          "share": "/usr/share/nginx/html/index.html"
+        }
+      }
+    }
+  ],
+  "applications": {
+    "api": {
+      "type": "python 3.11",
+      "path": "/postgres-fastapi",
+      "module": "main",
+      "callable": "app",
+      "processes": 3
+    }
+  },
+  "access_log": "/dev/stdout"
+}
