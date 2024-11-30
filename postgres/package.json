@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node client.js"
+  },
   "dependencies": {
     "pg": "^7.12.1"
   }

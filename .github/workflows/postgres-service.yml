@@ -15,11 +15,10 @@ jobs:
     # runs all of the steps inside the specified container rather than on the VM host.
     # Because of this the network configuration changes from host based network to a container network.
     container:
-      image:  node:10.16-jessie
-
+      image: ubuntu:lts
     services:
       postgres:
-        image: postgres:10.8
+        image: postgres:latest
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -30,43 +29,73 @@ jobs:
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-    - uses: actions/checkout@v1
-    - run: npm ci
-      working-directory: ./postgres
-    - run: node client.js
-      working-directory: ./postgres
+    - uses: actions/checkout@v4
+    - name: Build Dockerfile
+      run: docker build --tag example_services .
+      working-directory: ./postgres-fastapi
+
+    - name: Run Dockerfile
+      run: docker run --name app example_services
+      working-directory: ./postgres-fastapi
       env:
         # use postgres for the host here because we have specified a container for the job.
         # If we were running the job on the VM this would be localhost
         POSTGRES_HOST: postgres
         POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
 
-# Runs all steps on the VM
-# The service containers will use host port binding instead of container networking so you access them via localhost rather than the service name
-  vm-job:
+  fastapi-vm-job:
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        image: postgres:10.8
+        image: postgres:latest
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
         ports:
-        # will assign a random free host port
-        - 5432/tcp
+          - 5432/tcp
         # needed because the postgres container does not provide a healthcheck
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-    - uses: actions/checkout@v1
-    - run: npm ci
+    - uses: actions/checkout@v4
+    - name: Build Dockerfile
+      run: docker build --tag example_services .
+      working-directory: ./postgres-fastapi
+    - name: Run Dockerfile
+      run: docker run --network host -e POSTGRES_PORT=${{ job.services.postgres.ports[5432] }} --name app -d example_services
+
+    - name: Check back-end
+      run: curl --fail --retry-delay 5 --retry 3 --retry-connrefused localhost:8000
+
+  node-js-vm-job:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          # will assign a random free host port
+          - 5432/tcp
+        # needed because the postgres container does not provide a healthcheck
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Dockerfile
+      run: docker build --tag example_services .
       working-directory: ./postgres
-    - run: node client.js
+
+    - name: Run Dockerfile
+      run: docker run --network host --name app example_services
       working-directory: ./postgres
       env:
         # use localhost for the host here because we are running the job on the VM.
         # If we were running the job on in a container this would be postgres
         POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }} # get randomly assigned published port
+        POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
